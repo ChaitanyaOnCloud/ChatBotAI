@@ -14,14 +14,13 @@ pipeline{
             }
         }
 
-       stage('Check Workspace') {
-    steps {
-        sh 'pwd'
-        sh 'ls -R'
-    }
-}
-
-        
+      stage('Install Dependencies') {
+            steps {
+                dir('DevOps-Project-28/Chatbot-UI') {
+                    sh 'npm install'
+                }
+            }
+        } 
         stage("Sonarqube Analysis "){
             steps{
                 withSonarQubeEnv('sonar-server') {
@@ -33,7 +32,7 @@ pipeline{
         stage("quality gate"){
            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-tokenn' 
                 }
             } 
         }
