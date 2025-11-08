@@ -10,17 +10,14 @@ pipeline{
     stages {
         stage('Checkout from Git'){
             steps{
-               git url: 'https://github.com/ChaitanyaOnCloud/ChatBotAI.git', branch: 'main', credentialsId: 'github'
+                git branch: 'main', url: 'https://github.com/ChaitanyaOnCloud/ChatBotAI.git'
             }
         }
-
-      stage('Install Dependencies') {
+        stage('Install Dependencies') {
             steps {
-                dir('DevOps-Project-28/Chatbot-UI') {
-                    sh 'npm install'
-                }
+                sh "npm install"
             }
-        } 
+        }
         stage("Sonarqube Analysis "){
             steps{
                 withSonarQubeEnv('sonar-server') {
@@ -51,7 +48,7 @@ pipeline{
             steps{
                 script{
                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
-                       sh "docker build -t chatbot Chatbot-UI"
+                       sh "docker build -t chatbot ."
                        sh "docker tag chatbot NotHarshhaa/chatbot:latest "
                        sh "docker push NotHarshhaa/chatbot:latest "
                     }
@@ -65,8 +62,8 @@ pipeline{
         }
         stage ("Remove container") {
             steps{
-                sh "docker stop chatbot || true"
-                sh "docker rm chatbot || true"
+                sh "docker stop chatbot | true"
+                sh "docker rm chatbot | true"
              }
         }
         stage('Deploy to container'){
@@ -76,7 +73,7 @@ pipeline{
         }
         stage('Deploy to kubernetes'){
             steps{
-                withAWS(credentials: 'aws-key', region: 'us-east-1'){
+                withAWS(credentials: 'aws-key', region: 'ap-south-1'){
                 script{
                     withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
                        sh 'kubectl apply -f k8s/chatbot-ui.yaml'
@@ -86,4 +83,4 @@ pipeline{
         }
         }
     }
-}
+    }
