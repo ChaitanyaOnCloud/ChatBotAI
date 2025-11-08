@@ -1,86 +1,103 @@
-pipeline{
+pipeline {
     agent any
-    tools{
+    tools {
         jdk 'jdk17'
-        nodejs 'node19'
     }
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+        SCANNER_HOME = tool 'sonar-scanner'
     }
     stages {
-        stage('Checkout from Git'){
-            steps{
+        stage('Checkout from Git') {
+            steps {
                 git branch: 'main', url: 'https://github.com/ChaitanyaOnCloud/ChatBotAI.git'
             }
         }
+
         stage('Install Dependencies') {
+            agent {
+                docker {
+                    image 'node:19-bullseye'  // NodeJS 19 + GLIBC 2.28+
+                    args '-u root:root'        // run as root so npm install works
+                }
+            }
             steps {
-                sh "npm install"
+                sh 'node -v'
+                sh 'npm install'
             }
         }
-        stage("Sonarqube Analysis "){
-            steps{
+
+        stage("Sonarqube Analysis") {
+            steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Chatbot \
-                    -Dsonar.projectKey=Chatbot '''
+                    sh '''$SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=Chatbot \
+                        -Dsonar.projectKey=Chatbot'''
                 }
             }
         }
-        stage("quality gate"){
-           steps {
+
+        stage("Quality Gate") {
+            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-tokenn' 
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-tokenn'
                 }
-            } 
+            }
         }
+
         stage('OWASP FS SCAN') {
             steps {
                 dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
+
         stage('TRIVY FS SCAN') {
             steps {
-                sh "trivy fs . > trivyfs.json"
+                sh 'trivy fs . > trivyfs.json'
             }
         }
-        stage("Docker Build & Push"){
-            steps{
-                script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
-                       sh "docker build -t chatbot ."
-                       sh "docker tag chatbot NotHarshhaa/chatbot:latest "
-                       sh "docker push NotHarshhaa/chatbot:latest "
+
+        stage("Docker Build & Push") {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                        sh 'docker build -t chatbot .'
+                        sh 'docker tag chatbot NotHarshhaa/chatbot:latest'
+                        sh 'docker push NotHarshhaa/chatbot:latest'
                     }
                 }
             }
         }
-        stage("TRIVY"){
-            steps{
-                sh "trivy image NotHarshhaa/chatbot:latest > trivy.json" 
+
+        stage("TRIVY") {
+            steps {
+                sh 'trivy image NotHarshhaa/chatbot:latest > trivy.json'
             }
         }
-        stage ("Remove container") {
-            steps{
-                sh "docker stop chatbot | true"
-                sh "docker rm chatbot | true"
-             }
+
+        stage("Remove container") {
+            steps {
+                sh 'docker stop chatbot || true'
+                sh 'docker rm chatbot || true'
+            }
         }
-        stage('Deploy to container'){
-            steps{
+
+        stage('Deploy to container') {
+            steps {
                 sh 'docker run -d --name chatbot -p 3000:3000 NotHarshhaa/chatbot:latest'
             }
         }
-        stage('Deploy to kubernetes'){
-            steps{
-                withAWS(credentials: 'aws-key', region: 'ap-south-1'){
-                script{
-                    withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                       sh 'kubectl apply -f k8s/chatbot-ui.yaml'
-                  }
+
+        stage('Deploy to kubernetes') {
+            steps {
+                withAWS(credentials: 'aws-key', region: 'ap-south-1') {
+                    script {
+                        withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+                            sh 'kubectl apply -f k8s/chatbot-ui.yaml'
+                        }
+                    }
                 }
             }
         }
-        }
     }
-    }
+}
