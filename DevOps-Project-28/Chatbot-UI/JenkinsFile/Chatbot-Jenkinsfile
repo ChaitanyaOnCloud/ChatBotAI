@@ -11,12 +11,13 @@ pipeline{
         stage('Checkout from Git'){
             steps{
                git url: 'https://github.com/ChaitanyaOnCloud/ChatBotAI.git', branch: 'main', credentialsId: 'github'
-
             }
         }
         stage('Install Dependencies') {
             steps {
-                sh "npm install"
+                dir('Chatbot-UI') {
+                    sh "npm install"
+                }
             }
         }
         stage("Sonarqube Analysis "){
@@ -42,16 +43,20 @@ pipeline{
         }
         stage('TRIVY FS SCAN') {
             steps {
-                sh "trivy fs . > trivyfs.json"
+                dir('Chatbot-UI') {
+                    sh "trivy fs . > trivyfs.json"
+                }
             }
         }
         stage("Docker Build & Push"){
             steps{
-                script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
-                       sh "docker build -t chatbot ."
-                       sh "docker tag chatbot NotHarshhaa/chatbot:latest "
-                       sh "docker push NotHarshhaa/chatbot:latest "
+                dir('Chatbot-UI') {
+                    script{
+                       withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
+                           sh "docker build -t chatbot ."
+                           sh "docker tag chatbot NotHarshhaa/chatbot:latest"
+                           sh "docker push NotHarshhaa/chatbot:latest"
+                        }
                     }
                 }
             }
@@ -63,8 +68,8 @@ pipeline{
         }
         stage ("Remove container") {
             steps{
-                sh "docker stop chatbot | true"
-                sh "docker rm chatbot | true"
+                sh "docker stop chatbot || true"
+                sh "docker rm chatbot || true"
              }
         }
         stage('Deploy to container'){
@@ -84,4 +89,4 @@ pipeline{
         }
         }
     }
-    }
+}
