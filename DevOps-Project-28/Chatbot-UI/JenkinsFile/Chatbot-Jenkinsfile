@@ -15,7 +15,7 @@ pipeline{
         }
         stage('Install Dependencies') {
             steps {
-                dir('Chatbot-UI') {
+                dir('Chatbot-UI') {   // Correct folder jahan package.json hai
                     sh "npm install"
                 }
             }
@@ -43,20 +43,16 @@ pipeline{
         }
         stage('TRIVY FS SCAN') {
             steps {
-                dir('Chatbot-UI') {
-                    sh "trivy fs . > trivyfs.json"
-                }
+                sh "trivy fs . > trivyfs.json"
             }
         }
         stage("Docker Build & Push"){
             steps{
-                dir('Chatbot-UI') {
-                    script{
-                       withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
-                           sh "docker build -t chatbot ."
-                           sh "docker tag chatbot NotHarshhaa/chatbot:latest"
-                           sh "docker push NotHarshhaa/chatbot:latest"
-                        }
+                script{
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
+                       sh "docker build -t chatbot Chatbot-UI"
+                       sh "docker tag chatbot NotHarshhaa/chatbot:latest "
+                       sh "docker push NotHarshhaa/chatbot:latest "
                     }
                 }
             }
