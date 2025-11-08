@@ -1,162 +1,86 @@
-pipeline {
+pipeline{
     agent any
-    tools {
+    tools{
         jdk 'jdk17'
+        nodejs 'node19'
     }
     environment {
-        SCANNER_HOME = tool 'sonar-scanner'
+        SCANNER_HOME=tool 'sonar-scanner'
     }
     stages {
-
-        stage('Checkout from Git') {
-            steps {
+        stage('Checkout from Git'){
+            steps{
                 git branch: 'main', url: 'https://github.com/ChaitanyaOnCloud/ChatBotAI.git'
             }
         }
-
         stage('Install Dependencies') {
-            agent {
-                docker {
-                    image 'node:19-bullseye'
-                    args '-u root:root'
-                }
-            }
             steps {
-                dir('DevOps-Project-28/Chatbot-UI') {
-                    sh 'node -v'
-                    sh 'npm install'
+                sh "npm install"
+            }
+        }
+        stage("Sonarqube Analysis "){
+            steps{
+                withSonarQubeEnv('sonar-server') {
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Chatbot \
+                    -Dsonar.projectKey=Chatbot '''
                 }
             }
         }
-
-        stage("Sonarqube Analysis") {
-            steps {
+        stage("quality gate"){
+           steps {
                 script {
-                    try {
-                        withSonarQubeEnv('sonar-server') {
-                            sh '''$SCANNER_HOME/bin/sonar-scanner \
-                                -Dsonar.projectName=Chatbot \
-                                -Dsonar.projectKey=Chatbot \
-                                -Dsonar.javascript.node.path=$(which node)'''
-                        }
-                    } catch (err) {
-                        echo "Sonar Analysis failed: ${err}"
-                    }
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
                 }
-            }
+            } 
         }
-
-        stage("Quality Gate") {
-            steps {
-                script {
-                    try {
-                        waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-tokenn'
-                    } catch (err) {
-                        echo "Quality Gate check skipped: ${err}"
-                    }
-                }
-            }
-        }
-
         stage('OWASP FS SCAN') {
             steps {
-                dir('DevOps-Project-28/Chatbot-UI') {
-                    script {
-                        try {
-                            dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                            dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-                        } catch (err) {
-                            echo "OWASP FS Scan failed: ${err}"
-                        }
-                    }
-                }
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
-
         stage('TRIVY FS SCAN') {
             steps {
-                dir('DevOps-Project-28/Chatbot-UI') {
-                    script {
-                        try {
-                            sh 'trivy fs . > trivyfs.json'
-                        } catch (err) {
-                            echo "Trivy FS Scan failed: ${err}"
-                        }
+                sh "trivy fs . > trivyfs.json"
+            }
+        }
+        stage("Docker Build & Push"){
+            steps{
+                script{
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
+                       sh "docker build -t chatbot ."
+                       sh "docker tag chatbot NotHarshhaa/chatbot:latest "
+                       sh "docker push NotHarshhaa/chatbot:latest "
                     }
                 }
             }
         }
-
-        stage("Docker Build & Push") {
-            steps {
-                dir('DevOps-Project-28/Chatbot-UI') {
-                    script {
-                        try {
-                            withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-                                sh 'docker build -t chatbot .'
-                                sh 'docker tag chatbot NotHarshhaa/chatbot:latest'
-                                sh 'docker push NotHarshhaa/chatbot:latest'
-                            }
-                        } catch (err) {
-                            echo "Docker Build/Push failed: ${err}"
-                        }
-                    }
+        stage("TRIVY"){
+            steps{
+                sh "trivy image NotHarshhaa/chatbot:latest > trivy.json" 
+            }
+        }
+        stage ("Remove container") {
+            steps{
+                sh "docker stop chatbot | true"
+                sh "docker rm chatbot | true"
+             }
+        }
+        stage('Deploy to container'){
+            steps{
+                sh 'docker run -d --name chatbot -p 3000:3000 NotHarshhaa/chatbot:latest'
+            }
+        }
+        stage('Deploy to kubernetes'){
+            steps{
+                withAWS(credentials: 'aws-key', region: 'ap-south-1'){
+                script{
+                    withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+                       sh 'kubectl apply -f k8s/chatbot-ui.yaml'
+                  }
                 }
             }
         }
-
-        stage("TRIVY Image Scan") {
-            steps {
-                script {
-                    try {
-                        sh 'trivy image NotHarshhaa/chatbot:latest > trivy.json'
-                    } catch (err) {
-                        echo "Trivy Image Scan failed: ${err}"
-                    }
-                }
-            }
         }
-
-        stage("Remove container") {
-            steps {
-                script {
-                    try {
-                        sh 'docker stop chatbot || true'
-                        sh 'docker rm chatbot || true'
-                    } catch (err) {
-                        echo "Remove container failed: ${err}"
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to container') {
-            steps {
-                script {
-                    try {
-                        sh 'docker run -d --name chatbot -p 3000:3000 NotHarshhaa/chatbot:latest'
-                    } catch (err) {
-                        echo "Deploy to container failed: ${err}"
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Kubernetes') {
-            steps {
-                script {
-                    try {
-                        withAWS(credentials: 'aws-key', region: 'ap-south-1') {
-                            withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                                sh 'kubectl apply -f k8s/chatbot-ui.yaml'
-                            }
-                        }
-                    } catch (err) {
-                        echo "Deploy to Kubernetes failed: ${err}"
-                    }
-                }
-            }
-        }
-
     }
-}
+    }
