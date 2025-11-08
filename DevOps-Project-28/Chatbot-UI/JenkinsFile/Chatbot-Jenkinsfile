@@ -21,8 +21,10 @@ pipeline {
                 }
             }
             steps {
-                sh 'node -v'
-                sh 'npm install'
+                dir('DevOps-Project-28/Chatbot-UI') {   // <-- important fix
+                    sh 'node -v'
+                    sh 'npm install'
+                }
             }
         }
 
@@ -46,24 +48,30 @@ pipeline {
 
         stage('OWASP FS SCAN') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                dir('DevOps-Project-28/Chatbot-UI') {
+                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                }
             }
         }
 
         stage('TRIVY FS SCAN') {
             steps {
-                sh 'trivy fs . > trivyfs.json'
+                dir('DevOps-Project-28/Chatbot-UI') {
+                    sh 'trivy fs . > trivyfs.json'
+                }
             }
         }
 
         stage("Docker Build & Push") {
             steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-                        sh 'docker build -t chatbot .'
-                        sh 'docker tag chatbot NotHarshhaa/chatbot:latest'
-                        sh 'docker push NotHarshhaa/chatbot:latest'
+                dir('DevOps-Project-28/Chatbot-UI') {
+                    script {
+                        withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                            sh 'docker build -t chatbot .'
+                            sh 'docker tag chatbot NotHarshhaa/chatbot:latest'
+                            sh 'docker push NotHarshhaa/chatbot:latest'
+                        }
                     }
                 }
             }
