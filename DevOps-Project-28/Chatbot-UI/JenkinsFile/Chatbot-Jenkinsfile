@@ -15,11 +15,10 @@ pipeline{
         }
         stage('Install Dependencies') {
             steps {
-                dir('Chatbot-UI') {   // Correct folder jahan package.json hai
                     sh "npm install"
                 }
             }
-        }
+        
         stage("Sonarqube Analysis "){
             steps{
                 withSonarQubeEnv('sonar-server') {
