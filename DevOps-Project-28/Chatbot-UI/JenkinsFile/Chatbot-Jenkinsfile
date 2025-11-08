@@ -13,11 +13,14 @@ pipeline{
                git url: 'https://github.com/ChaitanyaOnCloud/ChatBotAI.git', branch: 'main', credentialsId: 'github'
             }
         }
-        stage('Install Dependencies') {
-            steps {
-                    sh "npm install"
-                }
-            }
+
+       stage('Check Workspace') {
+    steps {
+        sh 'pwd'
+        sh 'ls -R'
+    }
+}
+
         
         stage("Sonarqube Analysis "){
             steps{
